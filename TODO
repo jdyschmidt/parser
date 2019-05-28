@@ -1,1 +1,4 @@
-- Create makefile
+- Turn nfaTester into returning Maybe Strings instead of Bools, that way we can compose with <$> instead of &&
+- Make an extra test wrapper inside the test suites??
+- NFA to DFA
+- Tokenizer using DFA
