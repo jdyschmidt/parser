@@ -32,14 +32,14 @@ instance (Show a) => Show (NFA a) where
 
 
 emptyNFA :: a -> IDGen (NFA a)
-emptyNFA info = do
+emptyNFA newInfo = do
     sID <- nextID
-    let s = State { label = sID, info = info, delta = Map.empty } in
+    let s = State { label = sID, info = newInfo, delta = Map.empty } in
         return NFA { states = Map.singleton sID s, final = Set.singleton sID, start = sID }
 
 
 insertTransition :: State a -> Char -> UUID -> State a
 insertTransition from c toID = let deltas = delta from
-                                   oldDelta = fromMaybe Set.empty $ Map.lookup '\0' deltas
-                                   newDelta = Map.insert '\0' (Set.insert toID oldDelta) deltas in
+                                   oldDelta = fromMaybe Set.empty $ Map.lookup c deltas
+                                   newDelta = Map.insert c (Set.insert toID oldDelta) deltas in
                                        from { delta = newDelta}

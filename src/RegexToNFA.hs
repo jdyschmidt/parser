@@ -1,7 +1,8 @@
 module RegexToNFA (
     Node(Repeat, Alt, Concat, C),
     buildAST,
-    astToNFA
+    astToNFA,
+    regexToNFA
 ) where
 
 import qualified Data.Map.Strict as Map
@@ -24,6 +25,9 @@ instance Ord Node where
     Concat _ <= Repeat _ = False
     Concat _ <= Alt _ = False
     Concat _ <= C _ = True
+    C _ <= Repeat _ = False
+    C _ <= Alt _ = False
+    C _ <= Concat _ = False
     Repeat n1 <= Repeat n2 = n1 <= n2
     Alt ns1 <= Alt ns2 = ns1 <= ns2
     Concat ns1 <= Concat ns2 = ns1 <= ns2
@@ -82,4 +86,7 @@ astToNFA (Repeat n) = do
                         | otherwise                     = s
         repeatStates = Map.map (finalFilter wrapToStart) (states nfa) in
         return nfa { states = repeatStates, final = Set.insert startID finals }
-    
+
+
+regexToNFA :: String -> IDGen (NFA ())
+regexToNFA = astToNFA . fst . (\s -> buildAST s [])
