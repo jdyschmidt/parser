@@ -35,8 +35,8 @@ instance (Show a) => Show (DFA a) where
 
 -----------------------------------------------------------------------------------
 
-nfaToDFA :: Eq a => NFA.NFA a -> IDGen (DFA a)
-nfaToDFA = (return . determinize) <=< collectTransitions <=< (return . weedDisconnected . contractEpsilonsBad)
+nfaToDFA :: Eq a => NFA.NFA a -> IDGen (DFA (Set.Set a))
+nfaToDFA = collectTransitions <=< (return . weedDisconnected . contractEpsilons)
 
 determinize :: NFA.NFA a -> DFA a
 determinize nfa = let determinizeDelta = Map.map (\v -> if (Set.size v) /= 1
@@ -45,8 +45,27 @@ determinize nfa = let determinizeDelta = Map.map (\v -> if (Set.size v) /= 1
                       determinizeState s = State { delta = determinizeDelta $ NFA.delta s, label = NFA.label s, info = NFA.info s } in
                         DFA { states = Map.map determinizeState $ NFA.states nfa, final = NFA.final nfa, start = NFA.start nfa }
 
-collectTransitions :: NFA.NFA a -> IDGen (NFA.NFA a)
-collectTransitions nfa = return nfa
+buildStateSetDelta :: NFA.NFA a -> Set.Set UUID -> Map.Map Char (Set.Set UUID)
+
+generateState :: NFA.NFA a -> Set.Set UUID -> State (Set.Set a)
+generateState nfa nfaID = let nfaState = fromJust $ Map.lookup nfaID NFA.states
+
+--  Map is from NFA state sets to new DFA states
+generateStates :: NFA.NFA a -> Set.Set UUID -> Map.Map (Set.Set UUID) UUID -> DFA (Set.Set a) -> IDGen(Map.Map (Set.Set UUID) UUID, DFA (Set.Set a))
+generateStates nfa currentStateIDs nfaToDFA prevDFA = let 
+    nfaStates = NFA.states nfa
+    currentStates = Set.foldr (Set.insert (\id -> fromJust $ Map.lookup id nfaStates)) Set.empty currentStateIDs
+    requiredTransitions = Set.foldr (Set.union . Map.keysSet . NFA.delta) Set.empty currentStates
+    followTransitions :: Char -> Set.Set UUID
+    followTransitions t = Set.foldr (Set.union . (\state -> fromMaybe Set.empty (Map.lookup t $ NFA.delta state))) Set.empty currentStates
+        -- APPLY followTransitions ACCORDING TO requiredTransitions
+
+
+collectTransitions :: NFA.NFA a -> IDGen (DFA (Set.Set a))
+collectTransitions nfa = let rootID = nextID
+                             rootState :: State
+                             rootState = State {} in -- Use generateState
+                                generateStates nfa (Map.singleton rootID (NFA.start nfa)) (DFA { states = Set.singleton rootState, final = isFinal rootState, start = rootID })
 
 contractEpsilonBad :: Eq a => (Map.Map UUID (NFA.State a), Set.Set UUID) -> UUID -> (Map.Map UUID (NFA.State a), Set.Set UUID) -> (Map.Map UUID (NFA.State a), Set.Set UUID)
 contractEpsilonBad (allStates, oldFinal) root (prevVisited, prevFinal) = let epsilonStateIDs = fromMaybe Set.empty $ Map.lookup '\0' $ NFA.delta $ fromJust $ Map.lookup root allStates
@@ -81,7 +100,7 @@ collapseStates :: Eq a => NFA.NFA a -> UUID -> Set.Set UUID -> NFA.NFA a
 collapseStates nfa rootID toCollapseIDs = let oldStates = NFA.states nfa
                                               oldRoot = fromJust $ Map.lookup rootID oldStates
                                               toCollapse = Set.map (\id -> fromJust $ Map.lookup id oldStates) toCollapseIDs
-                                              newDelta = Set.foldr (\state -> \newDelta -> Map.union newDelta $ NFA.delta state)
+                                              newDelta = Set.foldr (\state -> \newDelta -> Map.union Set.union newDelta $ NFA.delta state)
                                                                    (NFA.delta oldRoot)
                                                                    toCollapse
                                               oldFinal = NFA.final nfa
